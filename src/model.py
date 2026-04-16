@@ -22,4 +22,18 @@ class SwinUNETRWithUncertainty(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-    
+    def predict_with_uncertainty(self, x, n_passes: int = cfg.MC_PASSES):
+        self.train()
+        preds = []
+        try:
+            with torch.no_grad():
+                for _ in range(n_passes):
+                    logits = sliding_window_inference(
+                        x, roi_size=cfg.ROI_SIZE, sw_batch_size=1,
+                        predictor=self.model, overlap=0.5
+                    )
+                    preds.append(self.sigmoid(logits))
+        finally:
+            self.eval()
+        preds = torch.stack(preds)
+        return preds.mean(0), preds.var(0)
